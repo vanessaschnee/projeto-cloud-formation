@@ -1,0 +1,418 @@
+AWSTemplateFormatVersion: 2010-09-09
+Parameters:
+
+# Especifica o nome de um par de chaves EC2 que será usado para acessar as instâncias EC2 criadas na pilha 
+  KeyName:
+    Type: 'AWS::EC2::KeyPair::KeyName'
+    Description: Name of an existing EC2 KeyPair to enable SSH access to the ECS instances.
+
+#Lista de VPCS na hora de configurar
+  VpcId:
+    Type: 'AWS::EC2::VPC::Id'
+    Description: Mostra lista de VPCS disponíveis 
+
+#Lista de Subnets na hora de configurar
+  SubnetId:
+    Type: 'List<AWS::EC2::Subnet::Id>'
+    Description: Mostra lista e você tem que selecionar pelo menos duas.
+
+# Quantidade de instâncias desejadas
+  DesiredCapacity:
+    Type: Number
+    Default: '1'
+
+# Máximo de instâncias que podem ser criadas no autoscaling    
+  MaxSize:
+    Type: Number
+    Default: '2'
+    Description: número máximo que o cluster executa.
+
+# Cria nome do container   
+  ContainerName:
+    Type: String
+    Default: 'wordpress'
+
+# Escolher tipo de instância desejada em uma lista de opções   
+  InstanceType:
+    Description: EC2 instance type
+    Type: String
+    Default: t2.micro
+    AllowedValues:
+      - t2.micro
+      - t2.small
+      - t2.medium
+      - t2.large
+    ConstraintDescription: Please choose a valid instance type.
+
+
+#Direciona para AMI's das imagens de acordo com a região
+Mappings:
+  AWSRegionToAMI:
+    us-east-1:
+      AMIID: ami-090eac1ebf6d08d82  
+    us-west-1:
+      AMIID: ami-0b79d8b301c308dbf
+
+Resources:
+
+  # Cria um cluster ECS
+  ECSCluster:
+    Type: 'AWS::ECS::Cluster'
+
+  # Grupo de segurança para o ECS
+  EcsSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: ECS Security Group
+      VpcId: !Ref VpcId
+
+  # Permite tráfego HTTP no ECS      
+  EcsSecurityGroupHTTPinbound:
+    Type: 'AWS::EC2::SecurityGroupIngress'
+    Properties:
+      GroupId: !Ref EcsSecurityGroup
+      IpProtocol: tcp
+      FromPort: 80
+      ToPort: 80
+      CidrIp: 0.0.0.0/0
+
+  # Permite tráfego TCP para qualquer IP na porta 22
+  EcsSecurityGroupSSHinbound:
+    Type: 'AWS::EC2::SecurityGroupIngress'
+    Properties:
+      GroupId: !Ref EcsSecurityGroup
+      IpProtocol: tcp
+      FromPort: 22
+      ToPort: 22
+      CidrIp: 0.0.0.0/0
+
+  # Permite tráfego TCP para qualquer IP entre as portas 31000 até 61000
+  EcsSecurityGroupALBports:
+    Type: 'AWS::EC2::SecurityGroupIngress'
+    Properties:
+      GroupId: !Ref EcsSecurityGroup
+      IpProtocol: tcp
+      FromPort: 31000
+      ToPort: 61000
+      SourceSecurityGroupId: !Ref EcsSecurityGroup
+
+  # Cria um grupo de logs no Amazon CloudWatch que vai persistir por 14 dias      
+  CloudwatchLogsGroup:
+    Type: 'AWS::Logs::LogGroup'
+    Properties:
+      LogGroupName: !Join 
+        - '-'
+        - - ECSLogGroup
+          - !Ref 'AWS::StackName'
+      RetentionInDays: 14
+
+   # Cria um sistema de arquivos EFS     
+  EFSFileSystem:
+    Type: 'AWS::EFS::FileSystem'
+    Properties:
+      PerformanceMode: generalPurpose
+      FileSystemTags:
+        - Key: Name
+          Value: MyEFSFileSystem
+
+  # Cria um ponto de montagem para o EFS          
+  EFSMountTarget:
+    Type: 'AWS::EFS::MountTarget'
+    Properties:
+      FileSystemId: !Ref EFSFileSystem
+      SecurityGroups:
+        - !Ref EcsSecurityGroup
+      SubnetId: !Select [0, !Ref SubnetId]
+
+  # Cria função que tem a política de permitir que o ECS se comunique com o ECR caso necessário
+  EcsTaskExecutionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ecs-tasks.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+      Policies:
+        - PolicyName: ecs-service
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'ecr:GetAuthorizationToken'
+                  - 'ecr:BatchCheckLayerAvailability'
+                  - 'ecr:GetDownloadUrlForLayer'
+                  - 'ecr:GetRepositoryPolicy'
+                  - 'ecr:ListImages'
+                  - 'ecr:DescribeRepositories'
+                Resource: '*'
+  
+  # Define como o container é configurado
+  taskdefinition:
+    Type: 'AWS::ECS::TaskDefinition'
+    Properties:
+      Family: !Join 
+        - ''
+        - - !Ref 'AWS::StackName'
+          - '-ecs-demo-app'
+      ExecutionRoleArn: !GetAtt EcsTaskExecutionRole.Arn
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      Cpu: '256' # Define a quantidade de CPU necessária
+      Memory: '512' # Define a quantidade de memória necessária
+      ContainerDefinitions:
+        - Name: !Ref ContainerName
+          Essential: true
+          Image: 971935086366.dkr.ecr.us-east-1.amazonaws.com/wp:latestimage
+          PortMappings:
+            - ContainerPort: 80
+  
+  # Balanceador de carga para o ECS
+  ECSALB:
+    Type: 'AWS::ElasticLoadBalancingV2::LoadBalancer'
+    Properties:
+      Name: ECSALB
+      Scheme: internet-facing
+      LoadBalancerAttributes:
+        - Key: idle_timeout.timeout_seconds
+          Value: '30'
+      Subnets: !Ref SubnetId
+      SecurityGroups:
+        - !Ref EcsSecurityGroup
+
+    # Permite tráfego HTTP para o ECS
+  ALBListener:
+    Type: 'AWS::ElasticLoadBalancingV2::Listener'
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref ECSTG
+      LoadBalancerArn: !Ref ECSALB
+      Port: '80'
+      Protocol: HTTP
+
+  # Cria regra que encaminha o tráfego HTTP para 'ECSTG'
+  ECSALBListenerRule:
+    Type: 'AWS::ElasticLoadBalancingV2::ListenerRule'
+    DependsOn: ALBListener
+    Properties:
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref ECSTG
+      Conditions:
+        - Field: path-pattern
+          Values:
+            - /
+      ListenerArn: !Ref ALBListener
+      Priority: 1
+
+  # Cria um target group para o ALB na porta 80 usando HTTP
+  ECSTG:
+    Type: 'AWS::ElasticLoadBalancingV2::TargetGroup'
+    DependsOn: ECSALB
+    Properties:
+      HealthCheckIntervalSeconds: 10
+      HealthCheckPath: /
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      Name: ECSTG
+      Port: 80
+      Protocol: HTTP
+      UnhealthyThresholdCount: 2
+      VpcId: !Ref VpcId
+
+  # Cria escalabilidade para as EC2's
+  ECSAutoScalingGroup:
+    Type: 'AWS::AutoScaling::AutoScalingGroup'
+    Properties:
+      VPCZoneIdentifier: !Ref SubnetId
+      LaunchConfigurationName: !Ref ContainerInstances
+      MinSize: '1'
+      MaxSize: !Ref MaxSize
+      DesiredCapacity: !Ref DesiredCapacity
+    CreationPolicy:
+      ResourceSignal:
+        Timeout: PT15M
+    UpdatePolicy:
+      AutoScalingReplacingUpdate:
+        WillReplace: 'true'
+
+  # Cria configurações para as EC2's no autoscaling
+  ContainerInstances:
+    Type: 'AWS::AutoScaling::LaunchConfiguration'
+    Properties:
+      ImageId: !FindInMap
+        - AWSRegionToAMI
+        - !Ref 'AWS::Region'
+        - AMIID
+      SecurityGroups:
+        - !Ref EcsSecurityGroup
+      InstanceType: !Ref InstanceType
+      IamInstanceProfile: !Ref EC2InstanceProfile
+      KeyName: !Ref KeyName
+      UserData: !Base64 
+        'Fn::Join':
+          - ''
+          - - |
+              #!/bin/bash -xe
+            - echo ECS_CLUSTER=!Ref ECSCluster >> /etc/ecs/ecs.config
+            - |
+              yum install -y aws-cfn-bootstrap
+            - '/opt/aws/bin/cfn-signal -e $? '
+            - '         --stack '
+            - !Ref 'AWS::StackName'
+            - '         --resource ECSAutoScalingGroup '
+            - '         --region '
+            - !Ref 'AWS::Region'
+            - |+
+  service:
+    Type: 'AWS::ECS::Service'
+    DependsOn: ALBListener
+    Properties:
+      Cluster: !Ref ECSCluster
+      DesiredCount: !Ref DesiredCapacity
+      LaunchType: FARGATE # Use FARGATE para usar o modo Fargate
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          Subnets: !Ref SubnetId
+          SecurityGroups: [!Ref EcsSecurityGroup]
+      TaskDefinition: !Ref taskdefinition
+  ServiceScalingTarget:
+    Type: 'AWS::ApplicationAutoScaling::ScalableTarget'
+    DependsOn: service
+    Properties:
+      MaxCapacity: 2
+      MinCapacity: 1
+      ResourceId: !Join 
+        - ''
+        - - service/
+          - !Ref ECSCluster
+          - /
+          - !GetAtt 
+            - service
+            - Name
+      RoleARN: !GetAtt 
+        - AutoscalingRole
+        - Arn
+      ScalableDimension: 'ecs:service:DesiredCount'
+      ServiceNamespace: ecs
+  ServiceScalingPolicy:
+    Type: 'AWS::ApplicationAutoScaling::ScalingPolicy'
+    Properties:
+      PolicyName: AStepPolicy
+      PolicyType: StepScaling
+      ScalingTargetId: !Ref ServiceScalingTarget
+      StepScalingPolicyConfiguration:
+        AdjustmentType: PercentChangeInCapacity
+        Cooldown: 60
+        MetricAggregationType: Average
+        StepAdjustments:
+          - MetricIntervalLowerBound: 0
+            ScalingAdjustment: 200
+  ALB500sAlarmScaleUp:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      EvaluationPeriods: '1'
+      Statistic: Average
+      Threshold: '10'
+      AlarmDescription: Alarm if our ALB generates too many HTTP 500s.
+      Period: '60'
+      AlarmActions:
+        - !Ref ServiceScalingPolicy
+      Namespace: AWS/ApplicationELB
+      Dimensions:
+        - Name: LoadBalancer
+          Value: !GetAtt 
+            - ECSALB
+            - LoadBalancerFullName
+      ComparisonOperator: GreaterThanThreshold
+      MetricName: HTTPCode_ELB_5XX_Count
+  EC2Role:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+      Policies:
+        - PolicyName: ecs-service
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'ecs:CreateCluster'
+                  - 'ecs:DeregisterContainerInstance'
+                  - 'ecs:DiscoverPollEndpoint'
+                  - 'ecs:Poll'
+                  - 'ecs:RegisterContainerInstance'
+                  - 'ecs:StartTelemetrySession'
+                  - 'ecs:Submit*'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                Resource: '*'
+  AutoscalingRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - application-autoscaling.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+      Policies:
+        - PolicyName: service-autoscaling
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'application-autoscaling:*'
+                  - 'cloudwatch:DescribeAlarms'
+                  - 'cloudwatch:PutMetricAlarm'
+                  - 'ecs:DescribeServices'
+                  - 'ecs:UpdateService'
+                Resource: '*'
+  
+   # Cria perfil no IAM para a ec2 
+  EC2InstanceProfile:
+    Type: 'AWS::IAM::InstanceProfile'
+    Properties:
+      Path: /
+      Roles:
+        - !Ref EC2Role
+
+  # Cria um registro ECR para armazenar suas imagens Docker
+  ECRRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: my-ecr-repo
+      
+Outputs:
+  ecsservice:
+    Value: !Ref service
+  ecscluster:
+    Value: !Ref ECSCluster
+  ECSALB:
+    Description: Your ALB DNS URL
+    Value: !Join 
+      - ''
+      - - !GetAtt 
+          - ECSALB
+          - DNSName
+  taskdef:
+    Value: !Ref taskdefinition
+
+

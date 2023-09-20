@@ -168,7 +168,7 @@ Resources:
       ContainerDefinitions:
         - Name: !Ref ContainerName
           Essential: true
-          Image: wordpress:latest # Usando a AMI personalizada
+          Image: 971935086366.dkr.ecr.us-east-1.amazonaws.com/wp:latestimage
           PortMappings:
             - ContainerPort: 80
   

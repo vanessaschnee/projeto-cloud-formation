@@ -39,9 +39,23 @@ Parameters:
 Mappings:
   AWSRegionToAMI:
     us-east-1:
-      AMIID: ami-090eac1ebf6d08d82  
+      AMIID: ami-09bee01cc997a78a6
+    us-east-2:
+      AMIID: ami-0a9e12068cb98a01d
     us-west-1:
-      AMIID: ami-0b79d8b301c308dbf
+      AMIID: ami-0fa6c8d131a220017
+    us-west-2:
+      AMIID: ami-078c97cf1cefd1b38
+    eu-west-1:
+      AMIID: ami-0c9ef930279337028
+    eu-central-1:
+      AMIID: ami-065c1e34da68f2b02
+    ap-northeast-1:
+      AMIID: ami-02265963d1614d04d
+    ap-southeast-1:
+      AMIID: ami-0b68661b29b9e058c
+    ap-southeast-2:
+      AMIID: ami-00e4b147599c13588
       
 Resources:
 
@@ -239,7 +253,7 @@ Resources:
             - |+
 
   
-define um serviço ECS que executa contêineres em um cluster ECS  
+#define um serviço ECS que executa contêineres em um cluster ECS  
   service:
     Type: 'AWS::ECS::Service'
     DependsOn: ALBListener

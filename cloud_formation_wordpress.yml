@@ -96,6 +96,8 @@ Resources:
       ToPort: 61000
       SourceSecurityGroupId: !Ref EcsSecurityGroup
 
+
+
   # Cria um grupo de logs no Amazon CloudWatch que vai persistir por 14 dias      
   CloudwatchLogsGroup:
     Type: 'AWS::Logs::LogGroup'
@@ -149,7 +151,7 @@ Resources:
 
 
   # Cria função que tem a política de permitir que o ECS se comunique com o ECR caso necessário
-  EcsTaskExecutionRole:
+  ECSServiceRole:
     Type: 'AWS::IAM::Role'
     Properties:
       AssumeRolePolicyDocument:
@@ -157,7 +159,7 @@ Resources:
           - Effect: Allow
             Principal:
               Service:
-                - ecs-tasks.amazonaws.com
+                - ecs.amazonaws.com
             Action:
               - 'sts:AssumeRole'
       Path: /
@@ -167,13 +169,17 @@ Resources:
             Statement:
               - Effect: Allow
                 Action:
-                  - 'ecr:GetAuthorizationToken'
-                  - 'ecr:BatchCheckLayerAvailability'
-                  - 'ecr:GetDownloadUrlForLayer'
-                  - 'ecr:GetRepositoryPolicy'
-                  - 'ecr:ListImages'
-                  - 'ecr:DescribeRepositories'
+                  - 'ecs:CreateCluster'
+                  - 'ecs:DeregisterContainerInstance'
+                  - 'ecs:DiscoverPollEndpoint'
+                  - 'ecs:Poll'
+                  - 'ecs:RegisterContainerInstance'
+                  - 'ecs:StartTelemetrySession'
+                  - 'ecs:Submit*'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
                 Resource: '*'
+
   
     # Define como o container é configurado
   taskdefinition:

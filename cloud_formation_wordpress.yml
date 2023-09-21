@@ -105,8 +105,7 @@ Resources:
         - - ECSLogGroup
           - !Ref 'AWS::StackName'
       RetentionInDays: 14
-
-   # Cria um sistema de arquivos EFS     
+#cria efs
   EFSFileSystem:
     Type: AWS::EFS::FileSystem
 
@@ -116,7 +115,7 @@ Resources:
       GroupName: !Sub ${AWS::StackName}-EFS-MT-SG
       GroupDescription: !Sub ${AWS::StackName} SG do EFSMountTarget
       SecurityGroupIngress:
-        - Description: Permite trafego do ECSServiceSecurityGroup na porta 2049.
+        - Description: Permite tráfego do ECSServiceSecurityGroup na porta 2049.
           IpProtocol: tcp
           FromPort: 2049
           ToPort: 2049
@@ -125,29 +124,28 @@ Resources:
         - Key: Name
           Value: !Sub ${AWS::StackName}-EFS-MT-SG
       VpcId: !Ref VpcId
-  
 
-  # Cria um ponto de montagem para o EFS          
+  # Cria um ponto de montagem para o EFS
   EFSMountTarget1:
     Type: AWS::EFS::MountTarget
     Properties:
-      FileSystemId: !Ref EFS
-      SubnetId: !Select [ 0, !Ref SubnetId ]
+      FileSystemId: !Ref EFSFileSystem  # Use the correct resource name here
+      SubnetId: !Select [0, !Ref SubnetId]
       SecurityGroups:
         - !Ref EFSMountTargetSG
 
   EFSMountTarget2:
     Type: AWS::EFS::MountTarget
     Properties:
-      FileSystemId: !Ref EFS
-      SubnetId: !Select [ 1, !Ref SubnetId ]
+      FileSystemId: !Ref EFSFileSystem  # Use the correct resource name here
+      SubnetId: !Select [1, !Ref SubnetId]
       SecurityGroups:
         - !Ref EFSMountTargetSG
 
   EFSAccessPoint:
     Type: AWS::EFS::AccessPoint
     Properties:
-      FileSystemId: !Ref EFS
+      FileSystemId: !Ref EFSFileSystem
 
 
   # Cria função que tem a política de permitir que o ECS se comunique com o ECR caso necessário

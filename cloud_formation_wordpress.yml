@@ -92,13 +92,13 @@ Resources:
   EFSFileSystem:
     Type: AWS::EFS::FileSystem
 
-  EFSMountTargetSG:
+EFSMountTargetSG:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupName: !Sub ${AWS::StackName}-EFS-MT-SG
-      GroupDescription: !Sub ${AWS::StackName} SG do EFSMountTarget
+      GroupDescription: Security Group for EFS Mount Target
       SecurityGroupIngress:
-        - Description: Permite tráfego do ECSServiceSecurityGroup na porta 2049.
+        - Description: Allow traffic from ECSServiceSecurityGroup on port 2049.
           IpProtocol: tcp
           FromPort: 2049
           ToPort: 2049
@@ -107,6 +107,7 @@ Resources:
         - Key: Name
           Value: !Sub ${AWS::StackName}-EFS-MT-SG
       VpcId: !Ref VpcId
+
 
   EFSMountTarget1:
     Type: AWS::EFS::MountTarget

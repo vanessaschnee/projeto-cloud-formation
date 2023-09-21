@@ -126,6 +126,8 @@ Resources:
 
   EFSAccessPoint:
     Type: AWS::EFS::AccessPoint
+    Properties:
+      FileSystemId: !Ref EFSFileSystem
 
   ECSServiceRole:
     Type: 'AWS::IAM::Role'
@@ -284,7 +286,7 @@ Resources:
             - '         --resource ECSAutoScalingGroup '
             - '         --region '
             - !Ref 'AWS::Region'
-            - |+
+
   service:
     Type: 'AWS::ECS::Service'
     DependsOn: ALBListener
@@ -405,7 +407,7 @@ Resources:
                   - 'ecs:UpdateService'
                 Resource: '*'
 
-  # Cria perfil no IAM para a ec2 
+  # Cria perfil no IAM para a ec2
   EC2InstanceProfile:
     Type: 'AWS::IAM::InstanceProfile'
     Properties:
@@ -427,4 +429,3 @@ Outputs:
           - DNSName
   taskdef:
     Value: !Ref taskdefinition
-

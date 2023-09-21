@@ -129,15 +129,15 @@ Resources:
   EFSMountTarget1:
     Type: AWS::EFS::MountTarget
     Properties:
-      FileSystemId: !Ref EFSFileSystem  # Use the correct resource name here
+      FileSystemId: !Ref EFSFileSystem  # Corrected resource name
       SubnetId: !Select [0, !Ref SubnetId]
       SecurityGroups:
         - !Ref EFSMountTargetSG
-
+  
   EFSMountTarget2:
     Type: AWS::EFS::MountTarget
     Properties:
-      FileSystemId: !Ref EFSFileSystem  # Use the correct resource name here
+      FileSystemId: !Ref EFSFileSystem  # Corrected resource name
       SubnetId: !Select [1, !Ref SubnetId]
       SecurityGroups:
         - !Ref EFSMountTargetSG
@@ -205,7 +205,7 @@ Resources:
       Volumes:
         - Name: EFS
           EFSVolumeConfiguration:
-            FilesystemId: !Ref EFS
+            FilesystemId: !Ref EFSFileSystem  # Corrected resource name
             AuthorizationConfig:
               AccessPointId: !Ref EFSAccessPoint
               IAM: DISABLED

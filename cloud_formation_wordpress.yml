@@ -93,21 +93,20 @@ Resources:
     Type: AWS::EFS::FileSystem
 
   EFSMountTargetSG:
-      Type: AWS::EC2::SecurityGroup
-      Properties:
-        GroupName: !Sub ${AWS::StackName}-EFS-MT-SG
-        GroupDescription: Security Group for EFS Mount Target
-        SecurityGroupIngress:
-          - Description: Allow traffic from ECSServiceSecurityGroup on port 2049.
-            IpProtocol: tcp
-            FromPort: 2049
-            ToPort: 2049
-            SourceSecurityGroupId: !Ref EcsSecurityGroup
-        Tags:
-          - Key: Name
-            Value: !Sub ${AWS::StackName}-EFS-MT-SG
-        VpcId: !Ref VpcId
-
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub ${AWS::StackName}-EFS-MT-SG
+      GroupDescription: Security Group for EFS Mount Target
+      SecurityGroupIngress:
+        - Description: Allow traffic from ECSServiceSecurityGroup on port 2049.
+          IpProtocol: tcp
+          FromPort: 2049
+          ToPort: 2049
+          SourceSecurityGroupId: !Ref EcsSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-EFS-MT-SG
+      VpcId: !Ref VpcId
 
   EFSMountTarget1:
     Type: AWS::EFS::MountTarget
@@ -127,8 +126,6 @@ Resources:
 
   EFSAccessPoint:
     Type: AWS::EFS::AccessPoint
-    Properties:
-      FileSystemId: !Ref EFSFileSystem
 
   ECSServiceRole:
     Type: 'AWS::IAM::Role'
@@ -213,7 +210,6 @@ Resources:
       Port: '80'
       Protocol: HTTP
 
-
   # Cria regra que encaminha o tráfego HTTP para 'ECSTG'
   ECSALBListenerRule:
     Type: 'AWS::ElasticLoadBalancingV2::ListenerRule'
@@ -265,7 +261,7 @@ Resources:
   ContainerInstances:
     Type: 'AWS::AutoScaling::LaunchConfiguration'
     Properties:
-      ImageId: !FindInMap 
+      ImageId: !FindInMap
         - AWSRegionToAMI
         - !Ref 'AWS::Region'
         - AMIID
@@ -274,7 +270,7 @@ Resources:
       InstanceType: !Ref InstanceType
       IamInstanceProfile: !Ref EC2InstanceProfile
       KeyName: !Ref KeyName
-      UserData: !Base64 
+      UserData: !Base64
         'Fn::Join':
           - ''
           - - |
@@ -301,25 +297,27 @@ Resources:
           TargetGroupArn: !Ref ECSTG
       Role: !Ref ECSServiceRole
       TaskDefinition: !Ref taskdefinition
+
   ServiceScalingTarget:
     Type: 'AWS::ApplicationAutoScaling::ScalableTarget'
     DependsOn: service
     Properties:
       MaxCapacity: 2
       MinCapacity: 1
-      ResourceId: !Join 
+      ResourceId: !Join
         - ''
         - - service/
           - !Ref ECSCluster
           - /
-          - !GetAtt 
+          - !GetAtt
             - service
             - Name
-      RoleARN: !GetAtt 
+      RoleARN: !GetAtt
         - AutoscalingRole
         - Arn
       ScalableDimension: 'ecs:service:DesiredCount'
       ServiceNamespace: ecs
+
   ServiceScalingPolicy:
     Type: 'AWS::ApplicationAutoScaling::ScalingPolicy'
     Properties:
@@ -333,6 +331,7 @@ Resources:
         StepAdjustments:
           - MetricIntervalLowerBound: 0
             ScalingAdjustment: 200
+
   ALB500sAlarmScaleUp:
     Type: 'AWS::CloudWatch::Alarm'
     Properties:
@@ -346,11 +345,12 @@ Resources:
       Namespace: AWS/ApplicationELB
       Dimensions:
         - Name: LoadBalancer
-          Value: !GetAtt 
+          Value: !GetAtt
             - ECSALB
             - LoadBalancerFullName
       ComparisonOperator: GreaterThanThreshold
       MetricName: HTTPCode_ELB_5XX_Count
+
   EC2Role:
     Type: 'AWS::IAM::Role'
     Properties:
@@ -379,6 +379,7 @@ Resources:
                   - 'logs:CreateLogStream'
                   - 'logs:PutLogEvents'
                 Resource: '*'
+
   AutoscalingRole:
     Type: 'AWS::IAM::Role'
     Properties:
@@ -403,14 +404,15 @@ Resources:
                   - 'ecs:DescribeServices'
                   - 'ecs:UpdateService'
                 Resource: '*'
-  
-   # Cria perfil no IAM para a ec2 
+
+  # Cria perfil no IAM para a ec2 
   EC2InstanceProfile:
     Type: 'AWS::IAM::InstanceProfile'
     Properties:
       Path: /
       Roles:
         - !Ref EC2Role
+
 Outputs:
   ecsservice:
     Value: !Ref service
@@ -418,10 +420,11 @@ Outputs:
     Value: !Ref ECSCluster
   ECSALB:
     Description: Your ALB DNS URL
-    Value: !Join 
+    Value: !Join
       - ''
-      - - !GetAtt 
+      - - !GetAtt
           - ECSALB
           - DNSName
   taskdef:
     Value: !Ref taskdefinition
+
